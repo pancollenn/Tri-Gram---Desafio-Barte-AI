@@ -76,7 +76,6 @@ def parse_aurora_csv(caminho_aurora: Path) -> List[Dict[str, Any]]:
             {
                 "banco": config.BANCO_AURORA,
                 "ref_origem": ref_origem,
-                "linha_arquivo": indice,
                 "linha_fisica": indice,
                 "data": data_iso,
                 "descricao": desc_str,
