@@ -167,14 +167,14 @@ Tri-Gram---Desafio-Barte-AI/
     * `"ref_origem"`: `str` extraída da tag `<FITID>` (ex: `'MRD2026090132'`).
     * `"data"`: `str` ISO (`AAAA-MM-DD`, extraída de `<DTPOSTED>`).
     * `"descricao"`: `str` (tag `<MEMO>`).
-    * `"tipo_transacao"`: `str` (tag `<TRNTYPE>`, ex: `'CREDIT'`, `'DEBIT'`, `'OTHER'`).
+    * `"tipo"`: `str` (tag `<TRNTYPE>`, ex: `'CREDIT'`, `'DEBIT'`, `'OTHER'`).
     * `"valor"`: `Decimal` (tag `<TRNAMT>`, débito negativo, crédito positivo).
     * `"arquivo_origem"`: `str` (nome do arquivo físico `05b_extrato_banco_meridiano_*.ofx`).
-  * `"plano_contas"`: `Dict[str, Dict[str, Any]]` (mapa indexado por `conta_codigo`), com:
-    * `"conta_codigo"`: `str` (ex: `'1.1.03.002'`).
-    * `"descricao"`: `str` (ex: `'Comissões a Receber - Câmbio'`).
-    * `"natureza"`: `str` (`'DEVEDORA'` ou `'CREDORA'`).
-    * `"grupo"`: `str` (`'ATIVO'`, `'PASSIVO'`, `'RECEITA'`, `'DESPESA'`).
+  * `"plano_contas"`: `Dict[str, Any]` estruturado com:
+    * `"contas"`: `Dict[str, Dict[str, str]]` (mapa completo indexado por `COD_CONTA`, contendo `COD_CONTA`, `DESCRICAO`, `NATUREZA`, `GRUPO_CONTA`, `ACEITA_LANCTO`).
+    * `"analiticas"`: `Dict[str, Dict[str, str]]` (filtro apenas das contas que aceitam lançamento com `ACEITA_LANCTO == 'S'`).
+    * `"lista"`: `List[Dict[str, str]]` (todas as contas em lista ordenada).
+    * `"arquivo_origem"`: `str` (nome do arquivo físico `04_plano_de_contas_fenix_erp*.csv`).
   * `"arquivos"`: `Dict[str, str]` com os nomes dos arquivos lidos (`aurora`, `meridiano`, `plano`).
 
 ---
