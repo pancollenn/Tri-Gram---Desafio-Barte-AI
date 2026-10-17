@@ -33,15 +33,39 @@ Time **Tri-Gram**. Solução que automatiza o fechamento mensal da Tarvo (checko
 - **IA apenas onde há ambiguidade semântica** (classificação de lançamentos bancários atípicos, `metodo=IA` com `confianca < 1`) e como ferramenta de desenvolvimento. Sem chave de API, a solução roda por inteiro (fallback gracioso por regras).
 - **Rastro**: `rastro.csv` liga cada número de saída às linhas de origem; a soma de `valor` por `id_saida` fecha centavo a centavo (validada em `main.py` e em `tests/validate_saida.py`).
 
-## Instalação
+## Requisitos do Sistema
 
-Requer Python 3.9+ (testado em 3.12).
+### 1. Ambiente de Execução
+- **Python**: versão **3.9 ou superior** (desenvolvido e homologado em Python 3.12).
+- **Sistema Operacional**: compatível com Linux, macOS e Windows.
+
+### 2. Dependências de Pacotes Python
+A solução foi arquitetada para ser leve e resiliente, dependendo externamente apenas do leitor de planilhas:
+- **`openpyxl>=3.1`**: obrigatório para leitura e extração das planilhas `.xlsx` (tabela de taxas contratuais e borderô anexo do e-mail de câmbio).
+- Todas as demais funcionalidades utilizam exclusivamente a **biblioteca padrão do Python** (`decimal` para aritmética financeira exata, `email` para extração MIME in-memory, `csv`, `pathlib`, `datetime`, `argparse`).
 
 ```bash
+# Criação do ambiente virtual (recomendado)
 python -m venv .venv
-# Windows: .venv\Scripts\activate    |    Linux/macOS: source .venv/bin/activate
+
+# Ativação do ambiente
+# Linux/macOS:
+source .venv/bin/activate
+# Windows:
+# .venv\Scripts\activate
+
+# Instalação das dependências
 pip install -r requirements.txt
 ```
+
+### 3. Dados de Entrada
+- Ter os arquivos brutos do fechamento posicionados na pasta `data_pack/` (padrão do repositório) ou `data/`.
+- Alternativamente, o caminho pode ser informado via argumento `--data-dir <caminho>` ou pela variável de ambiente `TARVO_DATA_DIR`.
+
+### 4. Acesso a APIs / Conectividade
+- **Nenhuma chave de API ou conexão à internet é obrigatória**. O pipeline é 100% autossuficiente em ambiente local e offline.
+- A camada de classificação contábil (`classifier.py`) opera com regras determinísticas e fallback gracioso sem depender de provedores externos de LLM.
+
 
 ## Execução (comando único)
 
