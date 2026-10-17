@@ -121,7 +121,7 @@ def main() -> None:
     assert total_mutuo_meridiano == Decimal("1150000.00"), (
         f"Soma das TEDs de mútuo no Meridiano incorreta: {total_mutuo_meridiano}"
     )
-    print(f"  [OK] Mútuos Aurora→Meridiano: Aurora debitou R$ {abs(total_mutuo_aurora):,.2f}; "
+    print(f"  [OK] Mútuos Aurora -> Meridiano: Aurora debitou R$ {abs(total_mutuo_aurora):,.2f}; "
           f"Meridiano creditou R$ {total_mutuo_meridiano:,.2f} em 3 TEDs (4ª liquida em out).")
 
     # 6. Plano de contas: contas essenciais para o classificador

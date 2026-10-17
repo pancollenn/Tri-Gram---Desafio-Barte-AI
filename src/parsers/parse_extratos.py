@@ -135,6 +135,7 @@ def parse_meridiano_ofx(caminho_meridiano: Path) -> List[Dict[str, Any]]:
                 "documento": checknum,
                 "valor": valor_dec,
                 "tipo": trntype,
+                "tipo_transacao": trntype,
                 "arquivo_origem": caminho_meridiano.name,
             }
         )
@@ -158,17 +159,24 @@ def parse_plano_contas(caminho_plano: Path) -> Dict[str, Any]:
         if not cod_conta:
             continue
 
+        limpo["conta_codigo"] = cod_conta
+        limpo["descricao"] = limpo.get("DESCRICAO", "")
+        limpo["natureza"] = limpo.get("NATUREZA", "")
+        limpo["grupo"] = limpo.get("GRUPO_CONTA", "")
+
         contas_lista.append(limpo)
         contas_map[cod_conta] = limpo
         if limpo.get("ACEITA_LANCTO", "").upper() == "S":
             analiticas[cod_conta] = limpo
 
-    return {
+    resultado = dict(contas_map)
+    resultado.update({
         "contas": contas_map,
         "lista": contas_lista,
         "analiticas": analiticas,
         "arquivo_origem": caminho_plano.name,
-    }
+    })
+    return resultado
 
 
 def parse_extratos_e_plano(data_dir: Union[str, Path]) -> Dict[str, Any]:
