@@ -87,14 +87,14 @@ Legenda de status: ✅ confirmada / implementada · ⚠️ assumida (em validaç
 |---|---|---|---|
 | **Ingestão Checkout** | `src/parsers/parse_orbe.py` | 100% Concluído | `tests/test_parse_orbe.py` (9 cenários com `assert` aprovados) |
 | **Ingestão Remessas** | `src/parsers/parse_ponte.py` | 100% Concluído | `tests/test_parse_ponte.py` (30 testes com `assert` aprovados) |
-| **Ingestão Extratos e Plano** | `src/parsers/parse_extratos.py` | 100% Concluído (contrato `linha_arquivo`) | `tests/test_parse_extratos.py` (84 Aurora, 100 Meridiano, 32 analíticas) |
-| **Missão 1: Comissões** | `src/engine/comissoes.py` | Checkout 100% / Remessa integrada | `src/main.py --modulos checkout` (Auditoria 100% aprovada) |
-| **Missão 2: Divergências** | `src/engine/divergencias.py` | Regras mapeadas e prontas | Validado via `parse_orbe` e `parse_ponte` |
-| **Missão 3: Notas Fiscais** | `src/engine/notas.py` | Regras mapeadas e prontas | Validado via `comissoes` e `parse_ponte` |
-| **Missão 4: Classificação IA** | `src/ai/classifier.py` | Extratos e plano integrados | Estrutura híbrida (regras + LLM) |
-| **Missão 5: Pendências** | `src/engine/pendencias.py` | Catálogo das 7 pendências mapeado | Mapeamento pronto para consolidação final |
-| **Motor de Rastreabilidade** | `src/engine/rastro.py` | 100% Concluído e Operante | `RastroTracker.validar_todos()` em execução |
-| **Auditoria Cega Independente** | `tests/validate_saida.py` | 100% Concluído | Valida gabarito sem dependência de `src/` |
+| **Ingestão Extratos e Plano** | `src/parsers/parse_extratos.py` | 100% Concluído | `tests/test_parse_extratos.py` (84 Aurora, 100 Meridiano, 32 analíticas) |
+| **Missão 1: Comissões** | `src/engine/comissoes.py` | 100% Concluído e Integrado | `tests/test_comissoes.py` (24 testes unitários e de integração aprovados) |
+| **Missão 2: Divergências** | `src/engine/divergencias.py` | 100% Concluído e Integrado | `tests/test_divergencias.py` (35 testes aprovados; 238 divergências apuradas) |
+| **Missão 3: Notas Fiscais** | `src/engine/notas.py` | 100% Concluído e Integrado | `tests/test_notas.py` (31 testes aprovados; 21 NFS-e geradas) |
+| **Missão 4: Classificação IA** | `src/ai/classifier.py` | 100% Concluído e Integrado | `tests/test_classifier.py` (184 lançamentos classificados; 100% cobertura) |
+| **Missão 5: Pendências** | `src/engine/pendencias.py` | 100% Concluído e Integrado | `tests/test_pendencias.py` (53 testes aprovados; as 7 pendências consolidadas) |
+| **Motor de Rastreabilidade** | `src/engine/rastro.py` | 100% Concluído e Operante | `tests/test_rastro.py` (24 testes aprovados; 4.765 linhas; 56/56 IDs batendo) |
+| **Auditoria Cega Independente** | `tests/validate_saida.py` | 100% Concluído | Validação cega estrita com 0 erros e 0 avisos |
 
 ---
 
