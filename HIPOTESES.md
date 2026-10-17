@@ -49,7 +49,7 @@ Legenda de status: ✅ confirmada / implementada · ⚠️ assumida (em validaç
 | **RC-20** | Despesas administrativas correntes não provisionadas entram diretamente no grupo de despesas `4.2.xxx`. | `src/ai/classifier.py` | ✅ |
 | **RC-21** | Transferências entre contas próprias (Aurora ↔ Meridiano) vão para a conta transitória de mútuo `1.1.09.001`. Crédito sem identificação vai para `1.1.09.002` e vira pendência. | `src/ai/classifier.py`, `src/engine/pendencias.py` | ✅ |
 | **RC-22** | A liquidação da Orbe no Aurora não fecha com o relatório analítico do mês (débito/Pix no dia seguinte, crédito ao longo dos meses). Não é inconsistência. | (informativo / auditoria) | ✅ |
-| **RC-25** | **Referências Atômicas de Origem:** Banco Aurora utiliza obrigatoriamente a linha física do CSV (`ref_origem = 'L<n>'`, ex: `L50`); Banco Meridiano utiliza a tag SGML `<FITID>` (`ref_origem = 'MRD...'`). | `src/parsers/parse_extratos.py` | ✅ |
+| **RC-25** | **Referências Atômicas de Origem:** Banco Aurora utiliza obrigatoriamente o número da linha física original do CSV (`ref_origem = 'L<n>'`, ex: `L50`, registrado no retorno como `linha_arquivo`); Banco Meridiano utiliza a tag SGML `<FITID>` (`ref_origem = 'MRD...'`). | `src/parsers/parse_extratos.py` | ✅ |
 | **RC-26** | **Mútuo Aurora → Meridiano (Liquidação D+1):** Aurora debitou 4 transferências (R$ 1.450.000,00); Meridiano creditou 3 transferências em setembro (R$ 1.150.000,00). A 4ª TED (30/09, R$ 300.000,00) liquida em outubro no Meridiano. | `src/parsers/parse_extratos.py`, `tests/test_parse_extratos.py` | ✅ |
 
 ---
@@ -87,7 +87,7 @@ Legenda de status: ✅ confirmada / implementada · ⚠️ assumida (em validaç
 |---|---|---|---|
 | **Ingestão Checkout** | `src/parsers/parse_orbe.py` | 100% Concluído | `tests/test_parse_orbe.py` (9 cenários com `assert` aprovados) |
 | **Ingestão Remessas** | `src/parsers/parse_ponte.py` | 100% Concluído | `tests/test_parse_ponte.py` (30 testes com `assert` aprovados) |
-| **Ingestão Extratos e Plano** | `src/parsers/parse_extratos.py` | 100% Concluído | `tests/test_parse_extratos.py` (84 Aurora, 100 Meridiano, 32 analíticas) |
+| **Ingestão Extratos e Plano** | `src/parsers/parse_extratos.py` | 100% Concluído (contrato `linha_arquivo`) | `tests/test_parse_extratos.py` (84 Aurora, 100 Meridiano, 32 analíticas) |
 | **Missão 1: Comissões** | `src/engine/comissoes.py` | Checkout 100% / Remessa integrada | `src/main.py --modulos checkout` (Auditoria 100% aprovada) |
 | **Missão 2: Divergências** | `src/engine/divergencias.py` | Regras mapeadas e prontas | Validado via `parse_orbe` e `parse_ponte` |
 | **Missão 3: Notas Fiscais** | `src/engine/notas.py` | Regras mapeadas e prontas | Validado via `comissoes` e `parse_ponte` |
