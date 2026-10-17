@@ -5,17 +5,28 @@ Time **Tri-Gram**. Solução que automatiza o fechamento mensal da Tarvo (checko
 ## Visão geral da arquitetura (híbrida)
 
 ```
- arquivos brutos (CSV, XLSX, EML, OFX)
-            │
-            ▼
- ┌──────────────────────────────┐   dinheiro = código determinístico
- │ src/checkout.py   (Orbe)     │   (Decimal, ROUND_HALF_UP, regras
- │ src/remessas.py   (Ponte)    │    confirmadas com o financeiro)
- │ src/bancos.py  (Aurora/Mer.) │
- └──────────────┬───────────────┘
-                │  cada número → RastroTracker (src/rastro_tracker.py)
-                ▼
- src/main.py → saida/*.csv (6 arquivos) → tests/validate_saida.py (auditoria)
+                    arquivos brutos (CSV, XLSX, EML, OFX)
+                                     │
+                                     ▼
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │ 1. INGESTÃO (src/parsers/): parse_orbe, parse_ponte, parse_extratos    │
+ └───────────────────────────────────┬────────────────────────────────────┘
+                                     │ dados tipados (Decimal)
+                                     ▼
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │ 2. REGRAS & CÁLCULOS (src/engine/):                                    │
+ │    • comissoes.py    ➔ comissoes_por_lojista.csv                       │
+ │    • divergencias.py ➔ divergencias_taxa.csv                           │
+ │    • notas.py        ➔ notas_a_emitir.csv                              │
+ │    • pendencias.py   ➔ pendencias.csv                                  │
+ │    • rastro.py       ➔ rastro.csv (RastroTracker em memória)           │
+ ├────────────────────────────────────────────────────────────────────────┤
+ │ 3. IA & CLASSIFICAÇÃO (src/ai/):                                       │
+ │    • classifier.py   ➔ lancamentos_classificados.csv (Regra + LLM)     │
+ └───────────────────────────────────┬────────────────────────────────────┘
+                                     │ validação matemática
+                                     ▼
+      src/main.py ➔ saida/*.csv (6 arquivos) ➔ tests/validate_saida.py
 ```
 
 - **Números (comissões, divergências, notas): 100% código determinístico.** Nenhuma IA calcula dinheiro, pois LLMs erram somas de centavos e quebram o rastro.
@@ -54,17 +65,22 @@ Códigos de saída do `main.py`: `0` ok · `1` rastro/validação falhou · `2` 
 
 ## Estrutura do projeto
 
-| Caminho | Conteúdo | Dono |
+| Caminho | Responsabilidade / Entregável | Dono |
 |---|---|---|
-| `src/config.py` | Caminhos, contrato dos 6 CSVs, utilitários (`round_half_up`, `format_brl`, `clean_cnpj`) e regras de domínio confirmadas | compartilhado (mudanças pequenas e avisadas) |
-| `src/rastro_tracker.py` | `RastroTracker`: gera `id_saida`, acumula e valida o rastro | Pessoa 1 |
-| `src/checkout.py` | `processar_checkout(data_dir, tracker)` | Pessoa 1 |
-| `src/remessas.py` | `processar_remessas(data_dir, tracker)` | Pessoa 2 |
-| `src/bancos.py` | `processar_bancos(data_dir, tracker)` | Pessoa 2 |
-| `src/main.py` | Orquestra módulos, grava CSVs, valida | Pessoa 2 |
-| `tests/validate_saida.py` | Auditoria cega dos arquivos de `saida/` (independente de `src/`) | Pessoa 3 |
-| `saida/` | Os 6 CSVs gerados (fazem parte da entrega) | gerado |
-| `HIPOTESES.md`, `PROMPTS/`, `README.md` | Documentação exigida pelo edital | Pessoa 3 |
+| `src/config.py` | Configurações centrais, CNPJs, contratos dos 6 CSVs e regras do Slack | Compartilhado |
+| `src/parsers/parse_orbe.py` | Leitura da Orbe e Tabela de Taxas vigentes | Pessoa 1 |
+| `src/parsers/parse_ponte.py` | Extração do anexo `.xlsx` do e-mail `.eml` da Ponte Câmbio | Pessoa 2 |
+| `src/parsers/parse_extratos.py` | Leitura dos extratos Aurora (`CSV`), Meridiano (`OFX`) e Plano Fênix | Pessoa 2 |
+| `src/engine/comissoes.py` | ➔ Gera `comissoes_por_lojista.csv` (Checkout + Câmbio) | Pessoa 1 & 2 |
+| `src/engine/divergencias.py` | ➔ Gera `divergencias_taxa.csv` (Orbe + Ponte Câmbio) | Pessoa 1 & 2 |
+| `src/engine/notas.py` | ➔ Gera `notas_a_emitir.csv` (NFS-e lojistas e Nota Única Ponte) | Pessoa 2 |
+| `src/engine/pendencias.py` | ➔ Gera `pendencias.csv` (as 7 anomalias catalogadas) | Pessoa 2 |
+| `src/engine/rastro.py` | `RastroTracker` e ➔ grava `rastro.csv` (centavo a centavo) | Pessoa 1 |
+| `src/ai/classifier.py` | ➔ Gera `lancamentos_classificados.csv` no ERP (Regra + IA) | Pessoa 2 / 3 |
+| `src/main.py` | Orquestrador principal do pipeline | Compartilhado |
+| `tests/validate_saida.py` | Auditoria cega dos arquivos de `saida/` (independente de `src/`) | Pessoa 3 (QA) |
+| `saida/` | Os 6 CSVs gerados (entregáveis oficiais da banca) | Pipeline |
+| `HIPOTESES.md`, `PROMPTS/`, `README.md` | Documentação formal e logs de IA exigidos pelo edital | Pessoa 3 |
 
 Contrato de integração: cada módulo expõe uma função `processar_*(data_dir, tracker)` e devolve listas de dicionários com as chaves exatas dos cabeçalhos (`config.ARQUIVOS_SAIDA`). O `main.py` só chama, formata e grava; assim ninguém edita o arquivo de outra pessoa.
 

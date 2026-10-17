@@ -6,8 +6,10 @@ Uso::
     python src/main.py --data-dir <pasta>   # pasta com os arquivos brutos
     python src/main.py --modulos checkout   # roda só parte (desenvolvimento em paralelo)
 
-Este arquivo só ORQUESTRA: chama os módulos de domínio, serializa os 6 CSVs do
-contrato e dispara a auditoria. Nenhuma regra de negócio mora aqui.
+Estrutura em 3 camadas:
+    1. Ingestão: src/parsers/ (parse_orbe, parse_ponte, parse_extratos)
+    2. Engine:   src/engine/ (comissoes, divergencias, notas, pendencias, rastro)
+    3. AI:       src/ai/ (classifier)
 
 Códigos de saída: 0 = ok; 1 = rastro/validação falhou; 2 = erro de entrada/dados.
 """
@@ -25,7 +27,7 @@ _RAIZ = Path(__file__).resolve().parent.parent
 if str(_RAIZ) not in sys.path:
     sys.path.insert(0, str(_RAIZ))
 
-from src import bancos, checkout, remessas  # noqa: E402
+from src.ai import classifier  # noqa: E402
 from src.config import (  # noqa: E402
     ARQ_COMISSOES,
     ARQ_DIVERGENCIAS,
@@ -46,7 +48,9 @@ from src.config import (  # noqa: E402
     resolver_saida_dir,
     tem_precisao_de_centavos,
 )
-from src.rastro_tracker import RastroTracker  # noqa: E402
+from src.engine import comissoes, divergencias, notas, pendencias, rastro  # noqa: E402
+from src.engine.rastro import RastroTracker  # noqa: E402
+from src.parsers import parse_extratos, parse_orbe, parse_ponte  # noqa: E402
 
 MODULOS_DISPONIVEIS = ("checkout", "remessas", "bancos")
 SCRIPT_VALIDACAO = _RAIZ / "tests" / "validate_saida.py"
@@ -103,12 +107,12 @@ def _gravar_csv(spec: ArquivoSaida, linhas: Sequence[Dict[str, str]], saida_dir:
 
 
 # ---------------------------------------------------------------------------
-# Pipeline
+# Pipeline Modular
 # ---------------------------------------------------------------------------
 def executar_pipeline(
     data_dir: Path, tracker: RastroTracker, modulos: Sequence[str]
 ) -> Dict[str, List[Linha]]:
-    """Executa os módulos pedidos e consolida as linhas por arquivo de saída."""
+    """Executa o pipeline em camadas e consolida as linhas por arquivo de saída."""
     consolidado: Dict[str, List[Linha]] = {
         ARQ_COMISSOES: [],
         ARQ_DIVERGENCIAS: [],
@@ -116,26 +120,49 @@ def executar_pipeline(
         ARQ_LANCAMENTOS: [],
         ARQ_PENDENCIAS: [],
     }
-    # Passo 1 (Nível Mínimo): checkout. Passo 2 (Nível Alvo): remessas e bancos.
+
+    dados_checkout = {}
+    dados_remessas = {}
+    dados_extratos = {}
+
+    # 1. Ingestão (src/parsers/)
     if "checkout" in modulos:
-        print("[main] Processando CHECKOUT ...")
-        r = checkout.processar_checkout(data_dir, tracker)
-        consolidado[ARQ_COMISSOES] += r.comissoes
-        consolidado[ARQ_DIVERGENCIAS] += r.divergencias
-        consolidado[ARQ_NOTAS] += r.notas
-        consolidado[ARQ_PENDENCIAS] += r.pendencias
+        print("[main] [1/3 Ingestão] Lendo dados de Checkout (parse_orbe)...")
+        dados_checkout = parse_orbe.parse_orbe_e_taxas(data_dir)
+
     if "remessas" in modulos:
-        print("[main] Processando REMESSAS ...")
-        r = remessas.processar_remessas(data_dir, tracker)
-        consolidado[ARQ_COMISSOES] += r.comissoes
-        consolidado[ARQ_DIVERGENCIAS] += r.divergencias
-        consolidado[ARQ_NOTAS] += r.notas
-        consolidado[ARQ_PENDENCIAS] += r.pendencias
+        print("[main] [1/3 Ingestão] Lendo dados de Remessas (parse_ponte)...")
+        dados_remessas = parse_ponte.parse_ponte_e_taxas(data_dir)
+
     if "bancos" in modulos:
-        print("[main] Processando BANCOS ...")
-        b = bancos.processar_bancos(data_dir, tracker)
-        consolidado[ARQ_LANCAMENTOS] += b.lancamentos
-        consolidado[ARQ_PENDENCIAS] += b.pendencias
+        print("[main] [1/3 Ingestão] Lendo extratos bancários e plano ERP (parse_extratos)...")
+        dados_extratos = parse_extratos.parse_extratos_e_plano(data_dir)
+
+    # 2. Regras Determinísticas e Cálculos Financeiros (src/engine/)
+    if "checkout" in modulos or "remessas" in modulos:
+        print("[main] [2/3 Engine] Calculando comissões (comissoes.py)...")
+        comissoes_linhas = comissoes.calcular_comissoes(dados_checkout, dados_remessas, tracker)
+        consolidado[ARQ_COMISSOES].extend(comissoes_linhas)
+
+        print("[main] [2/3 Engine] Apurando divergências de taxas (divergencias.py)...")
+        divergencias_linhas = divergencias.apurar_divergencias(dados_checkout, dados_remessas, tracker)
+        consolidado[ARQ_DIVERGENCIAS].extend(divergencias_linhas)
+
+        print("[main] [2/3 Engine] Gerando faturamento e notas fiscais (notas.py)...")
+        notas_linhas = notas.gerar_notas_a_emitir(comissoes_linhas, dados_checkout, dados_remessas, tracker)
+        consolidado[ARQ_NOTAS].extend(notas_linhas)
+
+    # 3. Classificação Contábil Inteligente (src/ai/)
+    if "bancos" in modulos:
+        print("[main] [3/3 AI] Classificando extratos bancários no ERP (classifier.py)...")
+        lancamentos_linhas = classifier.classificar_lancamentos(dados_extratos, tracker)
+        consolidado[ARQ_LANCAMENTOS].extend(lancamentos_linhas)
+
+    # 4. Governança e Triagem de Pendências
+    print("[main] [Governança] Consolidando pendências operacionais (pendencias.py)...")
+    pendencias_linhas = pendencias.consolidar_pendencias(dados_checkout, dados_remessas, dados_extratos, tracker)
+    consolidado[ARQ_PENDENCIAS].extend(pendencias_linhas)
+
     return consolidado
 
 
