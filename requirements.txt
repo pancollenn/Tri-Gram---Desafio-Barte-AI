@@ -1,0 +1,5 @@
+# Leitura de .xlsx (tabela de taxas e anexo do e-mail da Ponte Câmbio)
+openpyxl>=3.1
+
+# Opcional: apenas se a equipe escrever testes unitários adicionais
+# pytest>=8.0

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Segredos (NUNCA versionar chaves de API)
+.env
+.env.*
+!.env.example
+
+# IDEs / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ATENÇÃO: a pasta saida/ NÃO é ignorada, ela faz parte da entrega.
