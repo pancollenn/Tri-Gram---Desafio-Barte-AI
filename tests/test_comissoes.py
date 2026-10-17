@@ -27,7 +27,7 @@ if str(_RAIZ) not in sys.path:
 from src import config
 from src.engine.comissoes import calcular_comissoes
 from src.engine.rastro import RastroTracker
-from src.parsers import parse_orbe
+from src.parsers import parse_orbe, parse_ponte
 
 
 class TestRunner:
@@ -54,11 +54,12 @@ def testar_casos_unitarios(runner: TestRunner) -> None:
     print("=" * 70)
 
     tracker = RastroTracker()
-    arquivo_teste = "01_orbe_relatorio_comissoes_set2026.csv"
+    arquivo_teste_checkout = "01_orbe_relatorio_comissoes_set2026.csv"
+    arquivo_teste_remessas = "03_email_ponte_cambio_relatorio_set2026.eml"
 
     # Dataset com casos representativos de cada regra de checkout
-    dados_mock: Dict[str, Any] = {
-        "arquivo_origem": arquivo_teste,
+    dados_mock_checkout: Dict[str, Any] = {
+        "arquivo_origem": arquivo_teste_checkout,
         "transacoes": [
             # Caso A: Venda comum Crédito à vista (Bridge: R$ 1.000,00 @ 2.59% = R$ 25.90)
             {
@@ -129,24 +130,70 @@ def testar_casos_unitarios(runner: TestRunner) -> None:
         ],
     }
 
-    resultado = calcular_comissoes(dados_mock, {}, tracker)
+    # Dataset com casos representativos de cada regra de remessas
+    dados_mock_remessas: Dict[str, Any] = {
+        "arquivo_origem": arquivo_teste_remessas,
+        "operacoes_validas": [
+            # Caso H: Operação normal Mundo Aberto (Spread R$ 200,00 -> 50% = R$ 100,00)
+            {
+                "ref_origem": "PC-MOCK-01",
+                "cnpj": "17.217.888/0001-11",
+                "lojista": "Mundo Aberto",
+                "spread_brl": Decimal("200.00"),
+                "is_valida_comissao": True,
+            },
+            # Caso I: Operação normal Mundo Aberto com arredondamento half-up (Spread R$ 100,05 -> 50% = R$ 50,03)
+            {
+                "ref_origem": "PC-MOCK-02",
+                "cnpj": "17217888000111",
+                "lojista": "Mundo Aberto",
+                "spread_brl": Decimal("100.05"),
+                "is_valida_comissao": True,
+            },
+            # Caso J: Operação duplicada (deve ser ignorada se não filtrada antes)
+            {
+                "ref_origem": "PC-MOCK-01",
+                "cnpj": "17217888000111",
+                "lojista": "Mundo Aberto",
+                "spread_brl": Decimal("200.00"),
+                "is_duplicada": True,
+            },
+            # Caso K: Operação com spread negativo (deve ser excluída)
+            {
+                "ref_origem": "PC-MOCK-NEG",
+                "cnpj": "17217888000111",
+                "lojista": "Mundo Aberto",
+                "spread_brl": Decimal("-150.00"),
+                "is_spread_negativo": True,
+            },
+            # Caso L: Operação de outro lojista de Remessas (Canguru: Spread R$ 500,00 -> 50% = R$ 250,00)
+            {
+                "ref_origem": "PC-MOCK-04",
+                "cnpj": "53.857.560/0001-23",
+                "lojista": "Canguru",
+                "spread_brl": Decimal("500.00"),
+                "is_valida_comissao": True,
+            },
+        ],
+    }
 
-    # 1. Validação de quantidade de lojistas retornados
-    cnpjs_retornados = {r["cnpj"] for r in resultado}
+    resultado = calcular_comissoes(dados_mock_checkout, dados_mock_remessas, tracker)
+
+    # 1. Validação de quantidade total de linhas (3 de checkout + 2 de remessas = 5)
     runner.asserir(
-        len(resultado) == 3,
-        "Quantidade de lojistas agrupados (esperado 3: Bridge, Casa do Estudante, Rota Global)",
-        f"Obtido {len(resultado)}: {cnpjs_retornados}",
+        len(resultado) == 5,
+        "Quantidade de linhas de comissão (esperado 5: 3 de Checkout + 2 de Remessa)",
+        f"Obtido {len(resultado)}: {[r['lojista'] + ' (' + r['linha_negocio'] + ')' for r in resultado]}",
     )
 
     # 2. Atlas Idiomas NÃO deve estar presente
-    cnpj_atlas = config.clean_cnpj("1076801732")
+    cnpjs_retornados = {r["cnpj"] for r in resultado}
     runner.asserir(
         "10768017000132" not in cnpjs_retornados,
         "Atlas Idiomas foi corretamente excluída das comissões (sem contrato 2026)",
     )
 
-    # 3. Conferência de valores calculados para a Bridge Idiomas
+    # 3. Conferência de valores calculados para a Bridge Idiomas (Checkout)
     bridge = next((r for r in resultado if "Bridge" in r["lojista"]), None)
     if bridge:
         # Esperado: 25.90 - 7.77 + 2.59 = 20.72
@@ -161,25 +208,39 @@ def testar_casos_unitarios(runner: TestRunner) -> None:
             "Linha de negócio da Bridge é 'CHECKOUT'",
         )
 
-    # 4. Conferência da Casa do Estudante (Tarifa zero)
+    # 4. Conferência da Casa do Estudante (Checkout: Tarifa zero)
     casa = next((r for r in resultado if "Casa do Estudante" in r["lojista"]), None)
     if casa:
         runner.asserir(
             casa["comissao_brl"] == Decimal("0.00"),
-            "Comissão da Casa do Estudante é rigorosamente R$ 0.00 (Tarifa Zero)",
+            "Comissão de Checkout da Casa do Estudante é rigorosamente R$ 0.00 (Tarifa Zero)",
             f"Obtido: R$ {casa['comissao_brl']}",
         )
 
-    # 5. Conferência da Rota Global
-    rota = next((r for r in resultado if "Rota Global" in r["lojista"]), None)
-    if rota:
+    # 5. Conferência da Mundo Aberto (Remessa: 50% de 200.00 + 50% de 100.05 = 100.00 + 50.03 = 150.03)
+    mundo = next((r for r in resultado if "Mundo Aberto" in r["lojista"] and r["linha_negocio"] == config.LINHA_REMESSA), None)
+    if mundo:
+        esperado_mundo = Decimal("150.03")
         runner.asserir(
-            rota["comissao_brl"] == Decimal("49.80"),
-            "Cálculo da Rota Global (R$ 2000 @ 2.49% = R$ 49.80)",
-            f"Obtido: R$ {rota['comissao_brl']}",
+            mundo["comissao_brl"] == esperado_mundo,
+            f"Cálculo de Remessa da Mundo Aberto (50% do Spread c/ half-up: Esperado R$ {esperado_mundo})",
+            f"Obtido: R$ {mundo['comissao_brl']}",
+        )
+        runner.asserir(
+            mundo["linha_negocio"] == config.LINHA_REMESSA,
+            "Linha de negócio da Mundo Aberto é 'REMESSA'",
         )
 
-    # 6. Rastreabilidade Matemática (RastroTracker)
+    # 6. Conferência da Canguru (Remessa: 50% de 500.00 = 250.00)
+    canguru_remessa = next((r for r in resultado if "Canguru" in r["lojista"] and r["linha_negocio"] == config.LINHA_REMESSA), None)
+    if canguru_remessa:
+        runner.asserir(
+            canguru_remessa["comissao_brl"] == Decimal("250.00"),
+            "Cálculo de Remessa da Canguru (50% de R$ 500.00 = R$ 250.00)",
+            f"Obtido: R$ {canguru_remessa['comissao_brl']}",
+        )
+
+    # 7. Rastreabilidade Matemática (RastroTracker)
     print("\n--- Validação do Motor de Rastreabilidade (rastro.csv) ---")
     falhas_rastro = []
     for r in resultado:
@@ -190,11 +251,11 @@ def testar_casos_unitarios(runner: TestRunner) -> None:
 
     runner.asserir(
         len(falhas_rastro) == 0,
-        "Rastro fecha centavo a centavo com o valor reportado para todos os lojistas",
+        "Rastro fecha centavo a centavo com o valor reportado para todos os lojistas (Checkout e Remessa)",
         "\n".join(falhas_rastro) if falhas_rastro else None,
     )
 
-    # 7. Unicidade e formato dos IDs de saída
+    # 8. Unicidade e formato dos IDs de saída
     ids_emitidos = [r["id_saida"] for r in resultado]
     runner.asserir(
         len(ids_emitidos) == len(set(ids_emitidos)),
@@ -208,7 +269,7 @@ def testar_casos_unitarios(runner: TestRunner) -> None:
 
 
 def testar_integracao_real(runner: TestRunner, data_dir_str: str, filtro_lojista: Optional[str] = None, filtro_cnpj: Optional[str] = None) -> None:
-    """Executa o cálculo sobre a saída real de `parse_orbe_e_taxas`."""
+    """Executa o cálculo sobre a saída real de `parse_orbe_e_taxas` e `parse_ponte_e_taxas`."""
     print("\n" + "=" * 70)
     print(" 2. TESTE DE INTEGRAÇÃO COM DADOS REAIS (`data_pack/`)")
     print("=" * 70)
@@ -222,25 +283,34 @@ def testar_integracao_real(runner: TestRunner, data_dir_str: str, filtro_lojista
     print(f"Lendo dados de entrada em: {data_dir}")
     try:
         dados_checkout = parse_orbe.parse_orbe_e_taxas(data_dir)
+        dados_remessas = parse_ponte.parse_ponte_e_taxas(data_dir)
     except Exception as exc:
-        print(f"  [AVISO] Falha ao executar parse_orbe: {exc}")
-        print("          (O parser ainda pode estar em desenvolvimento pelo colega)")
+        print(f"  [AVISO] Falha ao executar parsers: {exc}")
         return
 
     transacoes = dados_checkout.get("transacoes", [])
-    if not transacoes:
-        print("  [AVISO] parse_orbe retornou 0 transações (parser ainda não implementado).")
-        print("          Para validar as regras de negócio, consulte o teste unitário acima.")
-        return
+    operacoes = dados_remessas.get("operacoes_validas", [])
 
-    print(f"Total de transações recebidas do parser: {len(transacoes)}")
+    print(f"Total de transações de Checkout: {len(transacoes)}")
+    print(f"Total de operações válidas de Remessas: {len(operacoes)}")
 
     tracker = RastroTracker()
-    resultado = calcular_comissoes(dados_checkout, {}, tracker)
+    resultado = calcular_comissoes(dados_checkout, dados_remessas, tracker)
+
+    res_checkout = [r for r in resultado if r["linha_negocio"] == config.LINHA_CHECKOUT]
+    res_remessas = [r for r in resultado if r["linha_negocio"] == config.LINHA_REMESSA]
 
     runner.asserir(
-        len(resultado) > 0,
-        f"Cálculo de comissões gerou dados para {len(resultado)} lojistas",
+        len(res_checkout) == 21,
+        f"Checkout gerou dados para 21 lojistas (obtido: {len(res_checkout)})",
+    )
+    runner.asserir(
+        len(res_remessas) == 14,
+        f"Remessas gerou dados para 14 lojistas (obtido: {len(res_remessas)})",
+    )
+    runner.asserir(
+        len(resultado) == 35,
+        f"Total consolidado = 35 linhas de comissão (obtido: {len(resultado)})",
     )
 
     # Validar rastro de todos os lojistas
@@ -253,8 +323,18 @@ def testar_integracao_real(runner: TestRunner, data_dir_str: str, filtro_lojista
 
     runner.asserir(
         len(falhas_rastro) == 0,
-        f"Rastro validado com sucesso para todos os {len(resultado)} lojistas da base real",
-        f"{len(falhas_rastro)} lojista(s) com divergência" if falhas_rastro else None,
+        f"Rastro validado com sucesso para todas as {len(resultado)} linhas de comissão",
+        f"{len(falhas_rastro)} linha(s) com divergência" if falhas_rastro else None,
+    )
+
+    # Validar valores totais consolidados
+    total_checkout = sum(r["comissao_brl"] for r in res_checkout)
+    total_remessas = sum(r["comissao_brl"] for r in res_remessas)
+    esperado_remessas = Decimal("39543.45")
+
+    runner.asserir(
+        total_remessas == esperado_remessas,
+        f"Total de comissões de Remessa fecha centavo a centavo em R$ {esperado_remessas} (obtido: R$ {total_remessas})",
     )
 
     # Validar ausência da Atlas Idiomas
@@ -264,21 +344,20 @@ def testar_integracao_real(runner: TestRunner, data_dir_str: str, filtro_lojista
         "Atlas Idiomas ausente das comissões ativas da base real (conforme edital)",
     )
 
-    # Validar Casa do Estudante
-    casa = next((r for r in resultado if "estudante" in r["lojista"].lower()), None)
-    if casa:
+    # Validar Casa do Estudante no Checkout
+    casa_checkout = next((r for r in res_checkout if "estudante" in r["lojista"].lower()), None)
+    if casa_checkout:
         runner.asserir(
-            casa["comissao_brl"] == Decimal("0.00"),
-            "Casa do Estudante apurada com R$ 0.00 de comissão na base real",
-            f"Valor apurado: R$ {casa['comissao_brl']}",
+            casa_checkout["comissao_brl"] == Decimal("0.00"),
+            "Casa do Estudante apurada com R$ 0.00 de comissão no Checkout",
+            f"Valor apurado: R$ {casa_checkout['comissao_brl']}",
         )
 
     # Exibição da tabela de fechamento de comissões
-    print("\n" + "-" * 75)
-    print(f"{'ID SAÍDA':<10} {'CNPJ':<16} {'LOJISTA':<35} {'COMISSÃO BRL':>12}")
-    print("-" * 75)
+    print("\n" + "-" * 85)
+    print(f"{'ID SAÍDA':<10} {'CNPJ':<16} {'LINHA':<10} {'LOJISTA':<33} {'COMISSÃO BRL':>12}")
+    print("-" * 85)
 
-    total_comissao = Decimal("0.00")
     for r in resultado:
         # Filtros opcionais de CLI
         if filtro_lojista and filtro_lojista.lower() not in r["lojista"].lower():
@@ -286,13 +365,15 @@ def testar_integracao_real(runner: TestRunner, data_dir_str: str, filtro_lojista
         if filtro_cnpj and filtro_cnpj not in r["cnpj"]:
             continue
 
-        total_comissao += r["comissao_brl"]
-        print(f"{r['id_saida']:<10} {r['cnpj']:<16} {r['lojista'][:34]:<35} {r['comissao_brl']:>12.2f}")
+        print(f"{r['id_saida']:<10} {r['cnpj']:<16} {r['linha_negocio']:<10} {r['lojista'][:32]:<33} {r['comissao_brl']:>12.2f}")
 
-    print("-" * 75)
-    print(f"{'TOTAL GERAL CHECKOUT':<63} R$ {total_comissao:>10.2f}")
-    print("-" * 75)
+    print("-" * 85)
+    print(f"{'TOTAL CHECKOUT':<71} R$ {total_checkout:>10.2f}")
+    print(f"{'TOTAL REMESSAS':<71} R$ {total_remessas:>10.2f}")
+    print(f"{'TOTAL GERAL':<71} R$ {total_checkout + total_remessas:>10.2f}")
+    print("-" * 85)
     print(f"Total de linhas registradas no rastro.csv: {len(tracker.linhas)}")
+
 
 
 def main() -> int:
