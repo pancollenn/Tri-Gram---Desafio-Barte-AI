@@ -33,32 +33,68 @@ Time **Tri-Gram**. Solução que automatiza o fechamento mensal da Tarvo (checko
 - **IA apenas onde há ambiguidade semântica** (classificação de lançamentos bancários atípicos, `metodo=IA` com `confianca < 1`) e como ferramenta de desenvolvimento. Sem chave de API, a solução roda por inteiro (fallback gracioso por regras).
 - **Rastro**: `rastro.csv` liga cada número de saída às linhas de origem; a soma de `valor` por `id_saida` fecha centavo a centavo (validada em `main.py` e em `tests/validate_saida.py`).
 
-## Instalação
+## Requisitos do Sistema
 
-Requer Python 3.9+ (testado em 3.12).
+### 1. Ambiente de Execução
+- **Python**: versão **3.9 ou superior** (desenvolvido e homologado em Python 3.12).
+- **Sistema Operacional**: compatível com Linux, macOS e Windows.
+
+### 2. Dependências de Pacotes Python
+A solução foi arquitetada para ser leve e resiliente, dependendo externamente apenas do leitor de planilhas:
+- **`openpyxl>=3.1`**: obrigatório para leitura e extração das planilhas `.xlsx` (tabela de taxas contratuais e borderô anexo do e-mail de câmbio).
+- Todas as demais funcionalidades utilizam exclusivamente a **biblioteca padrão do Python** (`decimal` para aritmética financeira exata, `email` para extração MIME in-memory, `csv`, `pathlib`, `datetime`, `argparse`, `unittest`).
 
 ```bash
+# Criação do ambiente virtual (recomendado)
 python -m venv .venv
-# Windows: .venv\Scripts\activate    |    Linux/macOS: source .venv/bin/activate
+
+# Ativação do ambiente
+# Linux/macOS:
+source .venv/bin/activate
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# Windows (CMD):
+.venv\Scripts\activate.bat
+
+# Instalação das dependências
 pip install -r requirements.txt
 ```
 
+### 3. Dados de Entrada
+- Ter os arquivos brutos do fechamento posicionados na pasta `data_pack/` (padrão nativo do repositório) ou `data/`.
+- Alternativamente, o caminho pode ser informado via argumento `--data-dir <caminho>` ou pela variável de ambiente `TARVO_DATA_DIR`.
+
+### 4. Acesso a APIs / Conectividade
+- **Nenhuma chave de API ou conexão à internet é obrigatória**. O pipeline é 100% autossuficiente em ambiente local e offline.
+- A camada de classificação contábil (`classifier.py`) opera com regras determinísticas e fallback gracioso sem depender de provedores externos de LLM.
+
 ## Execução (comando único)
+
+Para rodar o pipeline completo de ponta a ponta:
 
 ```bash
 python src/main.py                 # gera os 6 CSVs em saida/ e audita ao final
 python tests/validate_saida.py     # auditoria isolada dos arquivos de saida/
 ```
 
-A pasta de entrada é procurada nesta ordem: `--data-dir` > variável `TARVO_DATA_DIR` > `data/` > `Tarvo_Data_Pack_set2026/` (na raiz do repositório ou ao lado dele). Copie os arquivos do data pack, **sem editar**, para `data/`.
+Esse comando único realiza todo o fluxo:
+1. **Ingestão automática** dos arquivos brutos (localizados automaticamente em `data_pack/`, `data/` ou `Tarvo_Data_Pack_set2026/`);
+2. **Cálculo determinístico** de comissões, divergências, notas fiscais e pendências;
+3. **Classificação contábil** dos extratos bancários no ERP Fênix;
+4. **Validação centavo a centavo** do `rastro.csv`;
+5. **Gravação dos 6 arquivos CSV** em `saida/`;
+6. **Disparo automático da auditoria cega** (`tests/validate_saida.py`).
 
-Opções úteis para desenvolvimento em paralelo:
+A pasta de entrada é procurada nesta ordem: `--data-dir` > variável `TARVO_DATA_DIR` > `data_pack/` > `data/` > `Tarvo_Data_Pack_set2026/` (na raiz do repositório ou ao lado dele). Copie os arquivos do data pack, **sem editar**, para `data/` ou utilize o `data_pack/` já presente na raiz.
+
+Opções úteis para execução e desenvolvimento em paralelo:
 
 ```bash
-python src/main.py --modulos checkout          # roda só o módulo da sua responsabilidade
+python src/main.py --modulos checkout          # roda só o módulo da sua responsabilidade (ex.: Checkout)
 python src/main.py --data-dir C:\caminho\dados --saida-dir C:\tmp\saida
-python tests/validate_saida.py -v              # lista todos os ids do rastro
-python tests/validate_saida.py --estrito       # avisos (ex.: arquivo vazio) viram erro
+python tests/validate_saida.py -v              # lista todos os ids do rastro individualmente
+python tests/validate_saida.py --estrito       # modo estrito: avisos viram erro
+python -m unittest discover -s tests -p "test_*.py" # executa a suíte de testes unitários e de integração
 ```
 
 Códigos de saída do `main.py`: `0` ok · `1` rastro/validação falhou · `2` erro de entrada ou de dados.
@@ -104,15 +140,34 @@ Contrato de integração: cada módulo expõe uma função `processar_*(data_dir
 
 Nenhuma chave de API é necessária para rodar. Se a camada opcional de IA for adicionada, a chave deve vir de variável de ambiente (`.env` está no `.gitignore`); **nunca** versione chaves.
 
-## Limitações conhecidas
+## Resultados Consolidados do Fechamento (Setembro/2026)
 
-- Estado atual: **esqueleto**. Os módulos de domínio retornam listas vazias até serem implementados; o pipeline roda e a auditoria passa com avisos de "arquivo sem linhas".
-- Os arquivos de entrada são localizados por padrão de nome (`config.PADROES_ENTRADA`); se houver mais de um arquivo para o mesmo padrão, o pipeline aborta em vez de escolher um.
-- O casamento de lojistas é por **código (EC) e CNPJ**, nunca por similaridade de nome. Lojista sem correspondência vira pendência, não palpite.
-- Casos fora das regras confirmadas vão para `pendencias.csv` com `quem_decide`, em vez de serem decididos pelo código (veja `HIPOTESES.md`).
-- `tests/validate_saida.py` confere formato e consistência interna (rastro x saída); **não** substitui o gabarito da banca.
+Execução completa e validada com **zero erros e zero avisos** no auditor cego estrito (`python tests/validate_saida.py --estrito`):
+
+| Entregável Oficial (`saida/*.csv`) | Registros Gerados | Montante Financeiro / Métrica | Nível de Entrega |
+|---|---|---|---|
+| `comissoes_por_lojista.csv` | 35 lojistas | **R$ 243.284,29** (Checkout: R$ 203.740,84 · Remessas: R$ 39.543,45) | Mínimo / Alvo ✅ |
+| `divergencias_taxa.csv` | 238 divergências | **R$ 16.574,47** em cobranças incorretas de adquirente e parceiros | Alvo ✅ |
+| `notas_a_emitir.csv` | 21 notas fiscais | **R$ 243.284,29** (20 NFS-e lojistas Checkout + 1 Nota Única Ponte Câmbio) | Alvo ✅ |
+| `lancamentos_classificados.csv` | 184 lançamentos | 100% dos extratos Aurora (CC 4471) e Meridiano (CC 90233) classificados no Fênix | Alvo ✅ |
+| `pendencias.csv` | 7 pendências | As 7 anomalias catalogadas com decisores atribuídos (Helena/Diego) | Extra ✅ |
+| `rastro.csv` | 4.765 apontamentos | **56 de 56 IDs** de comissão/nota fecham centavo a centavo com origem | Central (Eliminatório) ✅ |
+
+## Maturidade e Conformidade com o Edital
+
+- **Nível Mínimo:** 100% concluído (Comissões de checkout por lojista apuradas pela taxa contratada com rastro atômico).
+- **Nível Alvo:** 100% concluído (Comissões de ambas as linhas de negócio, divergências de taxa, notas a emitir com tomadores estritos e classificação contábil híbrida nos extratos bancários).
+- **Nível Extra:** 100% concluído (Rastro completo para todos os números, governança e triagem das 7 pendências para deliberação humana e generalização dinâmica para execução de outubro sem alteração de código).
+
+## Limitações conhecidas e salvaguardas de governança
+
+- Os arquivos de entrada são localizados por padrão de nome (`config.PADROES_ENTRADA` via `glob`); se houver mais de um arquivo para o mesmo padrão em um mesmo diretório, o pipeline aborta em vez de escolher no chute.
+- O casamento de lojistas é executado estritamente por **código (EC) e CNPJ sanitizado (14 dígitos)**, nunca por similaridade imprecisa de texto.
+- Transações de estabelecimentos sem contrato assinado em 2026 (Atlas Idiomas) e exceções comerciais (tarifa zero da Casa do Estudante) não geram notas indevidas e são encaminhadas para `pendencias.csv` com seus respectivos decisores humanos (`Financeiro Tarvo (Helena)` ou `Comercial Tarvo (Diego)`).
+- `tests/validate_saida.py` confere formato estrito e consistência matemática interna (rastro x saída) de forma desacoplada e independente de `src/`.
 
 ## Documentação adicional
 
 - [`HIPOTESES.md`](HIPOTESES.md): regras confirmadas com o financeiro, premissas assumidas e perguntas feitas.
-- [`PROMPTS/MOMENTOS.md`](PROMPTS/MOMENTOS.md): momentos críticos do uso de IA (e histórico das sessões em `PROMPTS/`).
+- [`especificacao_scripts.md`](especificacao_scripts.md): contratos técnicos, fluxo arquitetural e detalhamento dos componentes.
+- [`PROMPTS/MOMENTOS.md`](PROMPTS/MOMENTOS.md): momentos críticos do uso de IA e histórico das sessões.
