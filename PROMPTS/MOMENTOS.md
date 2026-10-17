@@ -10,6 +10,8 @@
 |---|---|---|---|
 | _(ex.: `sessao_01_planejamento.md`)_ | _(ex.: Claude / Antigravity)_ | _(Pessoa N)_ | _(ex.: análise do case e arquitetura)_ |
 
+| `sessao_parse_orbe` | Antigravity | Victor | Implementação do parser de Checkout (`src/parsers/parse_orbe.py`) e script de testes (`tests/test_parse_orbe.py`): extração do CSV da Orbe, cruzamento com taxas vigentes em Excel (resolução de ECs faltantes, vigência temporal da Bridge Idiomas, acordo da Casa do Estudante e pendência da Atlas Idiomas). |
+
 ---
 
 ## Momento 1: _(título curto)_

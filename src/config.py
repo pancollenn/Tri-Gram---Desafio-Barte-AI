@@ -59,6 +59,7 @@ SAIDA_DIR_PADRAO: Path = RAIZ_REPO / "saida"
 
 # Ordem de busca do diretório de entrada quando nada é informado.
 CANDIDATOS_DATA_DIR: Tuple[Path, ...] = (
+    RAIZ_REPO / "data_pack",
     RAIZ_REPO / "data",
     RAIZ_REPO / "Tarvo_Data_Pack_set2026",
     RAIZ_REPO.parent / "Tarvo_Data_Pack_set2026",
@@ -108,6 +109,7 @@ PADROES_ENTRADA: Dict[str, str] = {
     "plano_contas": "04_plano_de_contas_fenix_erp*.csv",
     "aurora": "05a_extrato_banco_aurora_*.csv",
     "meridiano": "05b_extrato_banco_meridiano_*.ofx",
+    "orbe_ajustes": "06_orbe_ajustes_tardios_*.csv",
 }
 
 
@@ -126,6 +128,26 @@ def localizar_arquivo(data_dir: Union[str, Path], chave: str) -> Path:
         nomes = ", ".join(a.name for a in achados)
         raise RuntimeError(f"Mais de um arquivo casa com '{padrao}': {nomes}")
     return achados[0]
+
+
+def localizar_arquivo_opcional(data_dir: Union[str, Path], chave: str) -> Optional[Path]:
+    """Localiza o arquivo identificado por ``chave`` em ``PADROES_ENTRADA`` se existir.
+
+    Devolve ``None`` se nenhum arquivo casar.
+    Raises:
+        RuntimeError: mais de um arquivo casa com o padrão.
+    """
+    padrao = PADROES_ENTRADA.get(chave)
+    if not padrao:
+        return None
+    achados = sorted(Path(data_dir).glob(padrao))
+    if not achados:
+        return None
+    if len(achados) > 1:
+        nomes = ", ".join(a.name for a in achados)
+        raise RuntimeError(f"Mais de um arquivo casa com '{padrao}': {nomes}")
+    return achados[0]
+
 
 
 # ---------------------------------------------------------------------------
